@@ -33,6 +33,9 @@ Arduino_Canvas *gfx = new Arduino_Canvas(180 /* width */, 640 /* height */, g, 0
  ******************************************************************************/
 #include "touch.h"
 
+#define BUTTON_PIN 0
+#define INTERRUPT_PIN 11
+
 uint32_t screenWidth;
 uint32_t screenHeight;
 uint32_t bufSize;
@@ -100,6 +103,21 @@ void my_touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
   }
 }
 
+unsigned long start_time;
+bool timing = false;
+void IRAM_ATTR ISR()
+{
+  if (timing)
+  {
+    timing = false;
+  }
+  else
+  {
+    start_time = millis();
+    timing = true;
+  }
+}
+
 void setup()
 {
   Serial.begin(115200);
@@ -128,6 +146,9 @@ void setup()
 
   // Init touch device
   touch_init(gfx->width(), gfx->height(), gfx->getRotation());
+
+  attachInterrupt(BUTTON_PIN, ISR, FALLING);
+  attachInterrupt(INTERRUPT_PIN, ISR, FALLING);
 
   lv_init();
 
@@ -194,24 +215,27 @@ void setup()
 
 void loop()
 {
-  ++cur_img_idx;
-  if (cur_img_idx >= img_list_count)
+  if (timing)
   {
-    cur_img_idx = 0;
+    ++cur_img_idx;
+    if (cur_img_idx >= img_list_count)
+    {
+      cur_img_idx = 0;
+    }
+
+    lv_img_set_src(ui_Image2, img_list[cur_img_idx]);
+
+    unsigned long time = millis() - start_time;
+
+    time /= 100;
+    int ss = time % 10;
+    time /= 10;
+    int sec = time % 60;
+    time /= 60;
+    int min = time % 60;
+    time /= 60;
+    lv_label_set_text_fmt(ui_Label2, "%.2d:%.2d:%.2d.%d", time, min, sec, ss);
   }
-
-  lv_img_set_src(ui_Image2, img_list[cur_img_idx]);
-
-  unsigned long time = millis();
-
-  time /= 100;
-  int ss = time % 10;
-  time /= 10;
-  int sec = time % 60;
-  time /= 60;
-  int min = time % 60;
-  time /= 60;
-  lv_label_set_text_fmt(ui_Label2, "%.2d:%.2d:%.2d.%d", time, min, sec, ss);
 
   lv_timer_handler(); /* let the GUI do its work */
 
